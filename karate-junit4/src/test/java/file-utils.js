@@ -1,4 +1,4 @@
-function(fileName) {
-  var text = karate.read(fileName);
+function fn(fileName) {
+  var text = read(fileName);
   return text;
 }

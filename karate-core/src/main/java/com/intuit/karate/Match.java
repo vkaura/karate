@@ -23,184 +23,237 @@
  */
 package com.intuit.karate;
 
+import com.intuit.karate.core.MatchType;
+import com.intuit.karate.core.FeatureContext;
+import com.intuit.karate.core.ScenarioContext;
 import com.intuit.karate.exception.KarateException;
 import com.intuit.karate.http.DummyHttpClient;
-import java.io.File;
 import java.util.List;
 import java.util.Map;
-import net.minidev.json.JSONObject;
+import net.minidev.json.JSONValue;
 
 /**
  *
  * @author pthomas3
  */
 public class Match {
-    
-    private final ScriptContext context;
+
+    protected final ScenarioContext context;
     private ScriptValue prevValue = ScriptValue.NULL;
-    
-    public static Match init() {
-        return new Match();
-    }
-    
-    public static Match init(String exp) {
-        Match m = new Match();
-        ScriptValue sv = Script.evalKarateExpression(exp, m.context);
-        return m.putAll(sv.evalAsMap(m.context));
-    }
-    
-    public static Match json(String exp) {
-        return parse(exp);
+
+    public static Match forHttp(LogAppender appender) {
+        return new Match(appender, null);
     }
 
-    public static Match xml(String exp) {
-        return parse(exp);
-    }    
-    
-    private static Match parse(String exp) {
-        Match m = new Match();
-        m.prevValue = Script.evalKarateExpression(exp, m.context);
-        return m;
+    public Match(String exp) {
+        this(null, exp);
     }
-    
-    private Match() {
-        ScriptEnv env = ScriptEnv.init(null, new File("."));
-        CallContext callContext = new CallContext(null, 0, null, -1, false, false, DummyHttpClient.class.getName());
-        context = new ScriptContext(env, callContext);
+
+    public Match() {
+        this(null, null);
     }
-    
+
+    public void clear() {
+        prevValue = ScriptValue.NULL;
+    }
+
+    public static Match init(Object o) {
+        Match match = new Match(null, null);
+        match.prevValue = new ScriptValue(o);
+        return match;
+    }
+
+    private Match(LogAppender appender, String exp) {
+        FeatureContext featureContext = FeatureContext.forEnv();
+        String httpClass = appender == null ? DummyHttpClient.class.getName() : null;
+        CallContext callContext = new CallContext(null, null, 0, null, -1, null, false, false,
+                httpClass, null, null, false);
+        context = new ScenarioContext(featureContext, callContext, null, appender);
+        if (exp != null) {
+            prevValue = Script.evalKarateExpression(exp, context);
+            if (prevValue.isMapLike()) {
+                putAll(prevValue.evalAsMap(context));
+            }
+        }
+    }
+
     private void handleFailure(AssertionResult ar) {
         if (!ar.pass) {
             context.logger.error("{}", ar);
             throw new KarateException(ar.message);
         }
-    }    
-    
-    public Match defText(String name, String exp) {
-        prevValue = Script.assignText(name, exp, context, false);
+    }
+
+    public Match text(String name, String exp) {
+        prevValue = Script.assign(AssignType.TEXT, name, exp, context, false);
         return this;
     }
-    
+
     public Match putAll(Map<String, Object> map) {
         if (map != null) {
             map.forEach((k, v) -> context.vars.put(k, v));
         }
         return this;
     }
-    
+
     public Match eval(String exp) {
         prevValue = Script.evalKarateExpression(exp, context);
         return this;
-    }   
-    
+    }
+
     public Match def(String name, String exp) {
-        prevValue = Script.assign(name, exp, context, false);
+        prevValue = Script.assign(AssignType.AUTO, name, exp, context, false);
         return this;
     }
-    
+
     public Match def(String name, Object o) {
         prevValue = context.vars.put(name, o);
         return this;
     }
     
+    public Match get(String key) {
+        prevValue = context.vars.get(key);
+        return this;
+    }
+
+    public Match jsonPath(String exp) {
+        prevValue = Script.evalKarateExpression(exp, context);
+        return this;
+    }  
+
+    public ScriptValue value() {
+        return prevValue;
+    }
+
+    public boolean isBooleanTrue() {
+        return prevValue.isBooleanTrue();
+    }
+
+    public String asString() {
+        return prevValue.getAsString();
+    }
+    
+    public int asInt() {
+        return prevValue.getAsInt();
+    }    
+
+    public <T> T asType(Class<T> clazz) {
+        return prevValue.getValue(clazz);
+    }
+
     public Map<String, Object> asMap(String exp) {
         eval(exp);
         return prevValue.getAsMap();
     }
-    
+
     public Map<String, Object> asMap() {
         return prevValue == null ? null : prevValue.getAsMap();
     }
-    
+
     public String asJson() {
         return JsonUtils.toJson(prevValue.getAsMap());
-    }    
-    
+    }
+
     public Map<String, Object> allAsMap() {
         return context.vars.toPrimitiveMap();
     }
-    
+
     public ScriptValueMap vars() {
         return context.vars;
-    }    
-    
+    }
+
     public String allAsJson() {
         return JsonUtils.toJson(context.vars.toPrimitiveMap());
-    }    
-    
+    }
+
     public List<Object> asList(String exp) {
         eval(exp);
         return prevValue.getAsList();
-    }    
-    
-    public List<Object> asList() {
+    }
+
+    public List asList() {
         return prevValue.getAsList();
     }
-    
+
     public Match equalsText(String exp) {
         return matchText(exp, MatchType.EQUALS);
     }
-    
+
+    public static String quote(String exp) {
+        return exp == null ? "null" : "\"" + JSONValue.escape(exp) + "\"";
+    }
+
     public Match matchText(String exp, MatchType matchType) {
-        String quoted = exp == null ? "null" : "\"" + JSONObject.escape(exp) + "\"";
-        return match(quoted, matchType);
-    }    
-    
+        return match(quote(exp), matchType);
+    }
+
     private Match match(String exp, MatchType matchType) {
         AssertionResult result = Script.matchScriptValue(matchType, prevValue, "$", exp, context);
         handleFailure(result);
-        return this;        
+        return this;
     }
-    
+
     public Match equals(String exp) {
         return match(exp, MatchType.EQUALS);
     }
-    
+
     public Match contains(String exp) {
         return match(exp, MatchType.CONTAINS);
     }
 
-    private Match match(Object o, MatchType matchType) {
-        Script.matchNestedObject('.', "$", matchType, 
-                prevValue.getValue(), null, null, o, context);
-        return this;        
-    }    
-    
     // ideally 'equals' but conflicts with Java
     public Match equalsObject(Object o) {
         return match(o, MatchType.EQUALS);
     }
-    
+
     public Match contains(Object o) {
         return match(o, MatchType.CONTAINS);
-    }    
-    
+    }
+
+    private Match match(Object o, MatchType matchType) {
+        Script.matchNestedObject('.', "$", matchType,
+                prevValue.getValue(), null, null, o, context);
+        return this;
+    }
+
+    // static ==================================================================
+    //
     public static Match equals(Object o, String exp) {
         return match(o, exp, MatchType.EQUALS);
     }
-    
+
     public static Match equalsText(Object o, String exp) {
         return matchText(o, exp, MatchType.EQUALS);
-    }    
-    
+    }
+
     public static Match contains(Object o, String exp) {
         return match(o, exp, MatchType.CONTAINS);
-    } 
-    
+    }
+
     public static Match containsText(Object o, String exp) {
         return matchText(o, exp, MatchType.CONTAINS);
-    }     
-    
-    private static Match match(Object o, String exp, MatchType matchType) {    
-        Match m = Match.init();
+    }
+
+    private static Match match(Object o, String exp, MatchType matchType) {
+        Match m = new Match();
         m.prevValue = new ScriptValue(o);
         return m.match(exp, matchType);
     }
-    
-    private static Match matchText(Object o, String exp, MatchType matchType) {    
-        Match m = Match.init();
+
+    private static Match matchText(Object o, String exp, MatchType matchType) {
+        Match m = new Match();
         m.prevValue = new ScriptValue(o);
         return m.matchText(exp, matchType);
-    }    
+    }
+
+    public Match config(String key, String value) {
+        context.configure(key, value);
+        return this;
+    }
     
+    public Match config(Map<String, Object> config) {
+        config.forEach((k, v) -> context.configure(k, new ScriptValue(v)));
+        return this;
+    }
+
 }

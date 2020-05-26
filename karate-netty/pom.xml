@@ -5,39 +5,28 @@
     <parent>
         <groupId>com.intuit.karate</groupId>
         <artifactId>karate-parent</artifactId>
-        <version>0.7.0.RC2</version>
+        <version>0.9.5</version>
     </parent>
     <artifactId>karate-netty</artifactId>
-    <packaging>jar</packaging>   
+    <packaging>jar</packaging>
 
-    <dependencies>                         
-
+    <dependencies>                            
         <dependency>
             <groupId>com.intuit.karate</groupId>
             <artifactId>karate-apache</artifactId>
             <version>${project.version}</version>
         </dependency>
-        
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-all</artifactId>
-            <version>4.1.18.Final</version>
-        </dependency>        
-                     
-        <dependency>
-            <groupId>com.intuit.karate</groupId>
-            <artifactId>karate-junit4</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        
         <dependency>
             <groupId>net.masterthought</groupId>
             <artifactId>cucumber-reporting</artifactId>
-            <version>3.8.0</version>
+            <version>${cucumber.reporting.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
             <scope>test</scope>
-        </dependency>                                                                                                                                                                                          
-		
+        </dependency>                                                                                                                                                                                               		
     </dependencies>
     
     <build>
@@ -48,7 +37,70 @@
                     <exclude>**/*.java</exclude>
                 </excludes>
             </testResource>
-        </testResources>   
-    </build>               
+        </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>${nexus.staging.plugin.version}</version>
+                <configuration>
+                    <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
+                </configuration>
+            </plugin>                       
+        </plugins>           
+    </build> 
+    
+    <profiles>
+        <profile>
+            <id>fatjar</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <version>${maven.shade.version}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                    <finalName>karate-${project.version}</finalName>
+                                    <artifactSet>
+                                        <includes>
+                                            <include>*:*</include>                                    
+                                        </includes>
+                                    </artifactSet>
+                                    <transformers>
+                                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                            <mainClass>com.intuit.karate.Main</mainClass>
+                                        </transformer>
+                                    </transformers>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>2.5.3</version>
+                        <configuration>
+                            <descriptor>src/assembly/bin.xml</descriptor>
+                            <finalName>karate-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>                    
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>                                
+                </plugins>                 
+            </build>
+        </profile>
+    </profiles>              
     
 </project>

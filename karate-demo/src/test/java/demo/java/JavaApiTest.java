@@ -1,9 +1,10 @@
 package demo.java;
 
-import com.intuit.karate.cucumber.CucumberRunner;
+import com.intuit.karate.Runner;
 import java.util.HashMap;
 import java.util.Map;
 import static org.junit.Assert.assertEquals;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
@@ -12,11 +13,17 @@ import org.junit.Test;
  */
 public class JavaApiTest {
     
+    @BeforeClass
+    public static void beforeClass() {
+        // skip 'callSingle' in karate-config.js
+        System.setProperty("karate.env", "mock"); 
+    }    
+    
     @Test
     public void testCallingFeatureFromJava() {
         Map<String, Object> args = new HashMap();
         args.put("name", "World");
-        Map<String, Object> result = CucumberRunner.runFeature(getClass(), "from-java.feature", args, true);
+        Map<String, Object> result = Runner.runFeature(getClass(), "from-java.feature", args, true);
         assertEquals("Hello World", result.get("greeting"));
     }
     
@@ -24,7 +31,7 @@ public class JavaApiTest {
     public void testCallingClasspathFeatureFromJava() {
         Map<String, Object> args = new HashMap();
         args.put("name", "World");
-        Map<String, Object> result = CucumberRunner.runClasspathFeature("demo/java/from-java.feature", args, true);
+        Map<String, Object> result = Runner.runFeature("classpath:demo/java/from-java.feature", args, true);
         assertEquals("Hello World", result.get("greeting"));
     }    
     

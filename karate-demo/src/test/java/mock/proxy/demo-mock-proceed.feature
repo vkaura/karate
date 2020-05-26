@@ -8,8 +8,8 @@ Background:
 * print 'init target url:', targetUrlBase
 
 Scenario: pathMatches('/greeting') && paramValue('name') != null
-    * eval karate.proceed(targetUrlBase)
+    * karate.proceed(targetUrlBase)
 
-# catch all !
-Scenario: true
-    * eval karate.proceed(targetUrlBase)
+# 'catch-all' rule
+Scenario:
+    * karate.proceed(targetUrlBase)

@@ -15,8 +15,9 @@
     </appender>    
    
     <logger name="com.intuit" level="DEBUG"/>
+    <logger name="com.intuit.karate.debug" level="TRACE"/>
    
-    <root level="info">
+    <root level="warn">
         <appender-ref ref="STDOUT" />
         <appender-ref ref="FILE" />
     </root>

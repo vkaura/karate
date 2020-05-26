@@ -23,15 +23,17 @@
  */
 package com.intuit.karate;
 
-import com.intuit.karate.cucumber.FeatureWrapper;
+import com.intuit.karate.core.ScenarioContext;
+import com.intuit.karate.core.Feature;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import jdk.nashorn.api.scripting.ScriptObjectMirror;
 import org.w3c.dom.Node;
 
@@ -42,6 +44,7 @@ import org.w3c.dom.Node;
 public class ScriptValue {
 
     public static final ScriptValue NULL = new ScriptValue(null);
+    public static final ScriptValue FALSE = new ScriptValue(false);
 
     public static enum Type {
         NULL,
@@ -52,16 +55,17 @@ public class ScriptValue {
         LIST,
         JSON,
         XML,
-        JS_ARRAY,
-        JS_OBJECT,
         JS_FUNCTION,
         BYTE_ARRAY,
         INPUT_STREAM,
-        FEATURE_WRAPPER
+        FEATURE,
+        JAVA_FUNCTION
     }
 
     private final Object value;
     private final Type type;
+    private boolean listLike;
+    private boolean mapLike;
     private final String source; // file this came from, for better debug / logging
 
     public Object getValue() {
@@ -86,20 +90,18 @@ public class ScriptValue {
                 return "json";
             case XML:
                 return "xml";
-            case JS_ARRAY:
-                return "js[]";
-            case JS_OBJECT:
-                return "js{}";
             case JS_FUNCTION:
                 return "js()";
             case BYTE_ARRAY:
                 return "byte[]";
             case INPUT_STREAM:
                 return "stream";
-            case FEATURE_WRAPPER:
-                return "feat";
+            case FEATURE:
+                return "feature";
+            case JAVA_FUNCTION:
+                return "java()";
             default:
-                return "??";
+                return "???";
         }
     }
 
@@ -111,6 +113,10 @@ public class ScriptValue {
         return type == Type.STRING;
     }
 
+    public boolean isStringOrStream() {
+        return isString() || isStream();
+    }
+
     public boolean isXml() {
         return type == Type.XML;
     }
@@ -119,7 +125,15 @@ public class ScriptValue {
         return type == Type.INPUT_STREAM;
     }
 
-    public boolean isUnknownType() {
+    public boolean isByteArray() {
+        return type == Type.BYTE_ARRAY;
+    }
+
+    public boolean isFeature() {
+        return type == Type.FEATURE;
+    }
+
+    public boolean isUnknown() {
         return type == Type.UNKNOWN;
     }
 
@@ -127,28 +141,28 @@ public class ScriptValue {
         return type == Type.PRIMITIVE && "true".equals(value.toString());
     }
 
+    public boolean isPrimitive() {
+        return type == Type.PRIMITIVE;
+    }
+
+    public Number getAsNumber() {
+        return getValue(Number.class);
+    }
+
+    public boolean isNumber() {
+        return type == Type.PRIMITIVE && Number.class.isAssignableFrom(value.getClass());
+    }
+
     public boolean isFunction() {
         return type == Type.JS_FUNCTION;
     }
 
     public boolean isListLike() {
-        switch (type) {
-            case JS_ARRAY:
-            case LIST:
-                return true;
-            case JSON:
-                DocumentContext doc = (DocumentContext) value;
-                return doc.json() instanceof List;
-            default:
-                return false;
-        }
+        return listLike;
     }
 
     public List getAsList() {
         switch (type) {
-            case JS_ARRAY:
-                ScriptObjectMirror som = (ScriptObjectMirror) value;
-                return new ArrayList(som.values());
             case LIST:
                 return getValue(List.class);
             case JSON:
@@ -159,20 +173,23 @@ public class ScriptValue {
         }
     }
 
+    public boolean isJson() {
+        return type == Type.JSON;
+    }
+
     public boolean isJsonLike() {
         switch (type) {
             case JSON:
             case MAP:
-            case JS_OBJECT:
-            case JS_ARRAY:
             case LIST:
                 return true;
             default:
                 return false;
         }
     }
-    
-    public ScriptValue copy() {
+
+    // here deep means even for java List and Map, we convert to JSON and re-marshal
+    public ScriptValue copy(boolean deep) {
         switch (type) {
             case NULL:
             case UNKNOWN:
@@ -180,8 +197,9 @@ public class ScriptValue {
             case STRING:
             case BYTE_ARRAY:
             case INPUT_STREAM:
-            case FEATURE_WRAPPER:
-            case JS_FUNCTION:                
+            case FEATURE:
+            case JS_FUNCTION:
+            case JAVA_FUNCTION:
                 return this;
             case XML:
                 String xml = XmlUtils.toString(getValue(Node.class));
@@ -189,12 +207,24 @@ public class ScriptValue {
             case JSON:
                 String json = getValue(DocumentContext.class).jsonString();
                 return new ScriptValue(JsonPath.parse(json));
-            case MAP:                                               
-            case JS_OBJECT:
-            case JS_ARRAY:
+            case MAP:
+                if (deep) {                    
+                    Map mapSource = getValue(Map.class);
+                    String strSource = JsonPath.parse(mapSource).jsonString();
+                    Map mapDest = JsonPath.parse(strSource).read("$");
+                    // only care about JS functions for treating specially
+                    retainRootKeyValuesWhichAreFunctions(mapSource, mapDest, false);
+                    return new ScriptValue(mapDest);
+                } else {
+                    return new ScriptValue(new LinkedHashMap(getValue(Map.class)));
+                }
             case LIST:
-                DocumentContext mapOrListJson = getAsJsonDocument();
-                return new ScriptValue(JsonPath.parse(mapOrListJson).read("$"));            
+                if (deep) {
+                    String strList = getAsJsonDocument().jsonString();
+                    return new ScriptValue(JsonPath.parse(strList));
+                } else {
+                    return new ScriptValue(new ArrayList(getValue(List.class)));
+                }
             default:
                 return this;
         }
@@ -204,14 +234,10 @@ public class ScriptValue {
         switch (type) {
             case JSON:
                 return getValue(DocumentContext.class);
-            case JS_ARRAY: // happens for json resulting from nashorn
-                ScriptObjectMirror som = getValue(ScriptObjectMirror.class);
-                return JsonPath.parse(som.values());
-            case JS_OBJECT: // is a map-like object, happens for json resulting from nashorn
-            case MAP: // this happens because some jsonpath operations result in Map
+            case MAP:
                 Map<String, Object> map = getValue(Map.class);
                 return JsonPath.parse(map);
-            case LIST: // this also happens because some jsonpath operations result in List
+            case LIST:
                 List list = getValue(List.class);
                 return JsonPath.parse(list);
             default:
@@ -220,21 +246,12 @@ public class ScriptValue {
     }
 
     public boolean isMapLike() {
-        switch (type) {
-            case MAP:
-            case JSON:
-            case XML:
-            case JS_OBJECT:
-                return true;
-            default:
-                return false;
-        }
+        return mapLike;
     }
 
     public Map<String, Object> getAsMap() {
         switch (type) {
             case MAP:
-            case JS_OBJECT:
                 return getValue(Map.class);
             case JSON:
                 DocumentContext json = getValue(DocumentContext.class);
@@ -247,14 +264,14 @@ public class ScriptValue {
         }
     }
 
-    public ScriptValue invokeFunction(ScriptContext context) {
+    public ScriptValue invokeFunction(ScenarioContext context, Object callArg) {
         ScriptObjectMirror som = getValue(ScriptObjectMirror.class);
-        return Script.evalFunctionCall(som, null, context);
+        return Script.evalJsFunctionCall(som, callArg, context);
     }
 
-    public Map<String, Object> evalAsMap(ScriptContext context) {
+    public Map<String, Object> evalAsMap(ScenarioContext context) {
         if (isFunction()) {
-            ScriptValue sv = invokeFunction(context);
+            ScriptValue sv = invokeFunction(context, null);
             return sv.isMapLike() ? sv.getAsMap() : null;
         } else {
             return isMapLike() ? getAsMap() : null;
@@ -271,22 +288,53 @@ public class ScriptValue {
             case JSON:
                 DocumentContext doc = getValue(DocumentContext.class);
                 return JsonUtils.toPrettyJsonString(doc);
-            case JS_ARRAY:
             case LIST:
                 List list = getAsList();
                 DocumentContext listDoc = JsonPath.parse(list);
                 return JsonUtils.toPrettyJsonString(listDoc);
-            case JS_OBJECT:
             case MAP:
                 Map map = getAsMap();
                 DocumentContext mapDoc = JsonPath.parse(map);
                 return JsonUtils.toPrettyJsonString(mapDoc);
             case BYTE_ARRAY:
                 return "(..bytes..)";
-            case INPUT_STREAM:            
+            case INPUT_STREAM:
                 return "(..stream..)";
+            case UNKNOWN: // fall through
             default:
                 return value.toString();
+        }
+    }
+
+    public Object toLowerCase() {
+        switch (type) {
+            case JSON:
+                DocumentContext doc = getValue(DocumentContext.class);
+                return JsonUtils.toJsonDoc(doc.jsonString().toLowerCase());
+            case XML:
+                Node node = getValue(Node.class);
+                return XmlUtils.toXmlDoc(XmlUtils.toString(node).toLowerCase());
+            case LIST:
+                List list = getAsList();
+                DocumentContext listDoc = JsonPath.parse(list);
+                return JsonUtils.toJsonDoc(listDoc.jsonString().toLowerCase()).read("$");
+            case MAP:
+                DocumentContext mapDoc = JsonPath.parse(getAsMap());
+                return JsonUtils.toJsonDoc(mapDoc.jsonString().toLowerCase()).read("$");
+            case INPUT_STREAM:
+                return FileUtils.toString(getValue(InputStream.class)).toLowerCase();
+            case STRING:
+                return value.toString().toLowerCase();
+            default: // NULL, UNKNOWN, JS_FUNCTION, JAVA_FUNCTION, BYTE_ARRAY, PRIMITIVE
+                return value;
+        }
+    }
+
+    public int getAsInt() {
+        if (isNumber()) {
+            return getAsNumber().intValue();
+        } else {
+            return Integer.valueOf(getAsString());
         }
     }
 
@@ -304,15 +352,12 @@ public class ScriptValue {
                 } else {
                     return XmlUtils.toString(node);
                 }
-            case JS_ARRAY:
             case LIST:
                 List list = getAsList();
                 DocumentContext listDoc = JsonPath.parse(list);
                 return listDoc.jsonString();
-            case JS_OBJECT:
             case MAP:
-                Map map = getAsMap();
-                DocumentContext mapDoc = JsonPath.parse(map);
+                DocumentContext mapDoc = JsonPath.parse(getAsMap());
                 return mapDoc.jsonString();
             case JS_FUNCTION:
                 return value.toString().replace("\n", " ");
@@ -322,6 +367,19 @@ public class ScriptValue {
                 return FileUtils.toString(getValue(InputStream.class));
             default:
                 return value.toString();
+        }
+    }
+
+    public byte[] getAsByteArray() {
+        switch (type) {
+            case NULL:
+                return null;
+            case INPUT_STREAM:
+                return FileUtils.toBytes(getValue(InputStream.class));
+            case BYTE_ARRAY:
+                return getValue(byte[].class);
+            default:
+                return getAsString().getBytes();
         }
     }
 
@@ -364,30 +422,51 @@ public class ScriptValue {
         this(value, null);
     }
 
+    private static void retainRootKeyValuesWhichAreFunctions(Map source, Map target, boolean overWriteAll) {
+        source.forEach((k, v) -> { // check if any special objects need to be preserved
+            if (v instanceof ScriptObjectMirror) {
+                ScriptObjectMirror child = (ScriptObjectMirror) v;
+                if (child.isFunction()) { // only 1st level JS functions will be retained
+                    target.put(k, child);
+                }
+            } else if (overWriteAll) { // only 1st level non-JS (e.g. Java) objects will be retained
+                target.put(k, v);
+            }
+        });
+    }
+
     public ScriptValue(Object value, String source) {
+        // pre-process and convert any nashorn js objects into vanilla Map / List
+        if (value instanceof ScriptObjectMirror) {
+            ScriptObjectMirror som = (ScriptObjectMirror) value;
+            if (!som.isFunction()) {
+                value = JsonUtils.toJsonDoc(value).read("$"); // results in Map or List
+                if (value instanceof Map) {
+                    Map map = (Map) value;
+                    retainRootKeyValuesWhichAreFunctions(som, map, true);
+                }
+            }
+        }
         this.value = value;
         this.source = source;
         if (value == null) {
             type = Type.NULL;
         } else if (value instanceof DocumentContext) {
+            DocumentContext doc = (DocumentContext) value;
+            listLike = doc.json() instanceof List;
+            mapLike = !listLike;
             type = Type.JSON;
         } else if (value instanceof Node) {
+            mapLike = true;
             type = Type.XML;
         } else if (value instanceof List) {
+            listLike = true;
             type = Type.LIST;
+        } else if (value instanceof ScriptObjectMirror) { // has to be before Map
+            type = Type.JS_FUNCTION;
         } else if (value instanceof Map) {
-            if (value instanceof ScriptObjectMirror) {
-                ScriptObjectMirror som = (ScriptObjectMirror) value;
-                if (som.isArray()) {
-                    type = Type.JS_ARRAY;
-                } else if (som.isFunction()) {
-                    type = Type.JS_FUNCTION;
-                } else {
-                    type = Type.JS_OBJECT;
-                }
-            } else {
-                type = Type.MAP;
-            }
+            mapLike = true;
+            type = Type.MAP;
         } else if (value instanceof String) {
             type = Type.STRING;
         } else if (value instanceof byte[]) {
@@ -396,8 +475,10 @@ public class ScriptValue {
             type = Type.INPUT_STREAM;
         } else if (Script.isPrimitive(value.getClass())) {
             type = Type.PRIMITIVE;
-        } else if (value instanceof FeatureWrapper) {
-            type = Type.FEATURE_WRAPPER;
+        } else if (value instanceof Feature) {
+            type = Type.FEATURE;
+        } else if (value instanceof Function) {
+            type = Type.JAVA_FUNCTION;
         } else {
             type = Type.UNKNOWN;
         }

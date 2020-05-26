@@ -24,13 +24,15 @@
 package com.intuit.karate.http.jersey;
 
 import com.intuit.karate.FileUtils;
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.core.ScenarioContext;
+import com.intuit.karate.http.HttpLogModifier;
 import com.intuit.karate.http.HttpRequest;
 import com.intuit.karate.http.HttpUtils;
 import com.intuit.karate.http.LoggingFilterOutputStream;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -48,13 +50,14 @@ import javax.ws.rs.core.MultivaluedMap;
  */
 public class LoggingInterceptor implements ClientRequestFilter, ClientResponseFilter {
 
-    private final ScriptContext context;
-    
-    public LoggingInterceptor(ScriptContext context) {
-        this.context = context;
-    }    
-
+    private final ScenarioContext context;
+    private final HttpLogModifier logModifier;
     private final AtomicInteger counter = new AtomicInteger();
+
+    public LoggingInterceptor(ScenarioContext context) {
+        this.context = context;
+        logModifier = context.getConfig().getLogModifier();
+    }
 
     private static boolean isPrintable(MediaType mediaType) {
         if (mediaType == null) {
@@ -63,12 +66,28 @@ public class LoggingInterceptor implements ClientRequestFilter, ClientResponseFi
         return HttpUtils.isPrintable(mediaType.toString());
     }
 
-    private static void logHeaders(StringBuilder sb, int id, char prefix, MultivaluedMap<String, String> headers, HttpRequest actual) {
+    private static void logHeaders(HttpLogModifier logModifier, StringBuilder sb, int id, char prefix, MultivaluedMap<String, String> headers, HttpRequest actual) {
         Set<String> keys = new TreeSet(headers.keySet());
         for (String key : keys) {
             List<String> entries = headers.get(key);
-            sb.append(id).append(' ').append(prefix).append(' ')
-                    .append(key).append(": ").append(entries.size() == 1 ? entries.get(0) : entries).append('\n');
+            sb.append(id).append(' ').append(prefix).append(' ').append(key).append(": ");
+            if (entries.size() == 1) {
+                String entry = entries.get(0);
+                if (logModifier != null) {
+                    entry = logModifier.header(key, entry);
+                }
+                sb.append(entry).append('\n');
+            } else {
+                if (logModifier == null) {
+                    sb.append(entries).append('\n');
+                } else {
+                    List<String> list = new ArrayList(entries.size());
+                    for (String entry : entries) {
+                        list.add(logModifier.header(key, entry));
+                    }
+                    sb.append(list).append('\n');
+                }
+            }
             if (actual != null) {
                 actual.putHeader(key, entries);
             }
@@ -76,43 +95,49 @@ public class LoggingInterceptor implements ClientRequestFilter, ClientResponseFi
     }
 
     @Override
-    public void filter(ClientRequestContext request) throws IOException {            
+    public void filter(ClientRequestContext request) throws IOException {
         if (request.hasEntity() && isPrintable(request.getMediaType())) {
             LoggingFilterOutputStream out = new LoggingFilterOutputStream(request.getEntityStream());
             request.setEntityStream(out);
             request.setProperty(LoggingFilterOutputStream.KEY, out);
         }
+        HttpRequest actual = new HttpRequest();
+        context.setPrevRequest(actual);
+        actual.startTimer();
     }
 
     @Override
     public void filter(ClientRequestContext request, ClientResponseContext response) throws IOException {
+        HttpRequest actual = context.getPrevRequest();
+        actual.stopTimer();
         int id = counter.incrementAndGet();
-        HttpRequest actual = new HttpRequest();
         String method = request.getMethod();
         String uri = request.getUri().toASCIIString();
         actual.setMethod(method);
         actual.setUri(uri);
         StringBuilder sb = new StringBuilder();
-        sb.append('\n').append(id).append(" > ").append(method).append(' ').append(uri).append('\n');
-        logHeaders(sb, id, '>', request.getStringHeaders(), actual);        
+        sb.append("request\n").append(id).append(" > ").append(method).append(' ').append(uri).append('\n');
+        HttpLogModifier requestModifier = logModifier == null ? null : logModifier.enableForUri(uri) ? logModifier : null;
+        logHeaders(requestModifier, sb, id, '>', request.getStringHeaders(), actual);
         LoggingFilterOutputStream out = (LoggingFilterOutputStream) request.getProperty(LoggingFilterOutputStream.KEY);
-        if (out != null) {            
+        if (out != null) {
             byte[] bytes = out.getBytes().toByteArray();
             actual.setBody(bytes);
-            context.setPrevRequest(actual);
-            if (context.logger.isDebugEnabled()) {
-                String body = FileUtils.toString(bytes);
-                sb.append(body).append('\n');                
+            String buffer = FileUtils.toString(bytes);
+            if (context.getConfig().isLogPrettyRequest()) {
+                buffer = FileUtils.toPrettyString(buffer);
             }
-        }     
-        // response
-        if (!context.logger.isDebugEnabled()) {
-            return;
+            if (requestModifier != null) {
+                buffer = requestModifier.request(uri, buffer);
+            }
+            sb.append(buffer).append('\n');
         }
         context.logger.debug(sb.toString()); // log request
+        // response
         sb = new StringBuilder();
-        sb.append('\n').append(id).append(" < ").append(response.getStatus()).append('\n');
-        logHeaders(sb, id, '<', response.getHeaders(), null);
+        sb.append("response time in milliseconds: ").append(actual.getResponseTimeFormatted()).append('\n');
+        sb.append(id).append(" < ").append(response.getStatus()).append('\n');
+        logHeaders(requestModifier, sb, id, '<', response.getHeaders(), null);
         if (response.hasEntity() && isPrintable(response.getMediaType())) {
             InputStream is = response.getEntityStream();
             if (!is.markSupported()) {
@@ -120,6 +145,12 @@ public class LoggingInterceptor implements ClientRequestFilter, ClientResponseFi
             }
             is.mark(Integer.MAX_VALUE);
             String buffer = FileUtils.toString(is);
+            if (context.getConfig().isLogPrettyResponse()) {
+                buffer = FileUtils.toPrettyString(buffer);
+            }
+            if (requestModifier != null) {
+                buffer = requestModifier.request(uri, buffer);
+            }            
             sb.append(buffer).append('\n');
             is.reset();
             response.setEntityStream(is); // in case it was swapped

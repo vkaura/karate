@@ -1,10 +1,10 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.intuit.karate</groupId>
     <artifactId>karate-parent</artifactId>
-    <version>0.7.0.RC2</version>
+    <version>0.9.5</version>
     <packaging>pom</packaging>
     
     <name>${project.artifactId}</name>
@@ -35,35 +35,38 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
         <maven.compiler.version>3.6.0</maven.compiler.version>
-        <maven.surefire.version>2.10</maven.surefire.version>
-        <cucumber.version>1.2.5</cucumber.version>
+        <maven.surefire.version>2.22.2</maven.surefire.version>
+        <maven.shade.version>3.2.1</maven.shade.version>
         <junit.version>4.12</junit.version>
+        <javafx.controls.version>13-ea+12</javafx.controls.version>
         <nexus.staging.plugin.version>1.6.7</nexus.staging.plugin.version>
         <spring.version>4.3.8.RELEASE</spring.version>
-        <spring.boot.version>1.5.3.RELEASE</spring.boot.version>
-        <jacoco.plugin.version>0.7.9</jacoco.plugin.version>
+        <spring.boot.version>1.5.16.RELEASE</spring.boot.version>
+        <jacoco.plugin.version>0.7.9</jacoco.plugin.version>        
+        <cucumber.reporting.version>3.8.0</cucumber.reporting.version>
     </properties>
 
     <modules>
-        <module>karate-core</module>
-        <module>karate-apache</module>        
+        <module>karate-core</module>        
+        <module>karate-apache</module>
         <module>karate-junit4</module>
-        <module>karate-netty</module>     
+        <module>karate-junit5</module>        
+        <module>karate-netty</module>
+        <module>karate-gatling</module>             
         <module>karate-demo</module>
-        <module>karate-restdocs</module>
+        <module>karate-robot</module>
         <module>karate-mock-servlet</module>
-        <module>karate-jersey</module>
-        <module>karate-testng</module>
-        <module>karate-web</module>
-        <module>karate-archetype</module>        
-    </modules>
+        <module>karate-jersey</module>    
+        <module>karate-archetype</module>    
+  </modules>
 
     <dependencies>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>1.2.3</version>
-        </dependency>          		
+            <scope>runtime</scope>
+        </dependency>         		
     </dependencies>
 
     <build>       
@@ -83,9 +86,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.version}</version>
-			    <configuration>
-			        <argLine>-Dfile.encoding=UTF-8</argLine>
-			    </configuration>
+                <configuration>
+                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                </configuration>
             </plugin>                                                
         </plugins>
     </build>

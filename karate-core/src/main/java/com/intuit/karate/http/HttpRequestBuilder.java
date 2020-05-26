@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -46,6 +47,37 @@ public class HttpRequestBuilder {
     private ScriptValue body;
     private String method;
     private String soapAction;
+    private String retryUntil;
+
+    public HttpRequestBuilder copy() {
+        HttpRequestBuilder out = new HttpRequestBuilder();
+        out.url = url;
+        if (paths != null) {
+            out.paths = new ArrayList(paths);
+        }
+        if (headers != null) {
+            out.headers = new MultiValuedMap(headers);
+        }
+        if (params != null) {
+            out.params = new MultiValuedMap(params);
+        }
+        if (cookies != null) {
+            out.cookies = new LinkedHashMap(cookies);
+        }
+        if (formFields != null) {
+            out.formFields = new MultiValuedMap(formFields);
+        }
+        if (multiPartItems != null) {
+            out.multiPartItems = new ArrayList(multiPartItems);
+        }
+        if (body != null) {
+            out.body = body.copy(true);
+        }
+        out.method = method;
+        out.soapAction = soapAction;
+        out.retryUntil = retryUntil;
+        return out;
+    }
 
     public void setUrl(String url) {
         this.url = url;
@@ -53,6 +85,42 @@ public class HttpRequestBuilder {
 
     public String getUrl() {
         return url;
+    }
+
+    private static String getFirst(MultiValuedMap map, String name) {
+        if (map == null) {
+            return null;
+        }
+        Object temp = map.getFirst(name);
+        return temp == null ? null : temp.toString();
+    }
+
+    public String getHeader(String name) {
+        return getFirst(headers, name);
+    }
+
+    public String getParam(String name) {
+        return getFirst(params, name);
+    }
+
+    public String getUrlAndPath() {
+        String temp = url;
+        if (paths == null) {
+            if (!temp.endsWith("/")) {
+                temp = temp + "/";
+            }
+            return temp;
+        }
+        for (String path : paths) {
+            if (path.startsWith("/")) {
+                path = path.substring(1);
+            }
+            if (!temp.endsWith("/")) {
+                temp = temp + "/";
+            }
+            temp = temp + path;
+        }
+        return temp;
     }
 
     public void addPath(String path) {
@@ -76,9 +144,33 @@ public class HttpRequestBuilder {
         headers.remove(name);
     }
 
+    public void removeHeaderIgnoreCase(String name) {
+        if (headers == null || name == null) {
+            return;
+        }
+        List<String> list = headers.keySet().stream()
+                .filter(k -> name.equalsIgnoreCase(k))
+                .collect(Collectors.toList());
+        // has to be separate step else concurrent modification exception
+        list.forEach(k -> headers.remove(k));
+    }
+
     public void setHeaders(MultiValuedMap headers) {
         this.headers = headers;
-    }        
+    }
+
+    public void setHeader(String name, Object value) {
+        if (value instanceof List) {
+            setHeader(name, (List) value);
+        } else if (value != null) {
+            setHeader(name, value.toString());
+        } else { // unlikely null
+            if (headers == null) {
+                headers = new MultiValuedMap();
+            }
+            headers.put(name, null);
+        }
+    }
 
     public void setHeader(String name, String value) {
         setHeader(name, Collections.singletonList(value));
@@ -168,7 +260,7 @@ public class HttpRequestBuilder {
         }
         addMultiPartItem(item);
     }
-    
+
     public void addMultiPartItem(MultiPartItem item) {
         if (multiPartItems == null) {
             multiPartItems = new ArrayList<>();
@@ -213,6 +305,18 @@ public class HttpRequestBuilder {
 
     public String getSoapAction() {
         return soapAction;
+    }
+
+    public boolean isRetry() {
+        return retryUntil != null;
+    }
+
+    public String getRetryUntil() {
+        return retryUntil;
+    }
+
+    public void setRetryUntil(String retryUntil) {
+        this.retryUntil = retryUntil;
     }
 
 }

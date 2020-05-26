@@ -23,11 +23,11 @@
  */
 package com.intuit.karate.http;
 
+import com.intuit.karate.Config;
 import com.intuit.karate.CallContext;
-import com.intuit.karate.FileUtils;
-import com.intuit.karate.ScriptContext;
-import com.intuit.karate.ScriptEnv;
-import java.io.File;
+import com.intuit.karate.ScriptValue;
+import com.intuit.karate.core.ScenarioContext;
+import com.intuit.karate.core.FeatureContext;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
@@ -39,22 +39,21 @@ import static org.junit.Assert.*;
  */
 public class HttpClientTest {
     
-    private ScriptContext getContext() {
-        String featureDir = FileUtils.getDirContaining(getClass()).getPath();
-        ScriptEnv env = ScriptEnv.init("dev", new File(featureDir));
-        CallContext callContext = new CallContext(null, 0, null, -1, false, true, null);
-        return new ScriptContext(env, callContext);
+    private ScenarioContext getContext() {
+        FeatureContext featureContext = FeatureContext.forEnv();
+        CallContext callContext = new CallContext(null, true);
+        return new ScenarioContext(featureContext, callContext, null, null);
     }    
     
     @Test
     public void testSwappingHttpClient() {
-        HttpConfig config = new HttpConfig();
+        Config config = new Config();
         Map<String, Object> map = new HashMap<>();
         map.put("name", "John");
-        config.setUserDefined(map);
+        config.configure("userDefined", new ScriptValue(map));
         config.setClientClass("com.intuit.karate.http.CustomDummyHttpClient");
         HttpClient client = HttpClient.construct(config, getContext());
-        HttpResponse response = client.makeHttpRequest(null, 0);
+        HttpResponse response = client.makeHttpRequest(null, null);
         assertArrayEquals(response.getBody(), "hello John".getBytes());        
     }
     

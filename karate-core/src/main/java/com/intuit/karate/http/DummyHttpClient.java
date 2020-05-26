@@ -23,7 +23,8 @@
  */
 package com.intuit.karate.http;
 
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.Config;
+import com.intuit.karate.core.ScenarioContext;
 import java.io.InputStream;
 import java.util.List;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class DummyHttpClient extends HttpClient<String> {
     private static final Logger logger = LoggerFactory.getLogger(DummyHttpClient.class);
 
     @Override
-    public void configure(HttpConfig config, ScriptContext context) {
+    public void configure(Config config, ScenarioContext context) {
 
     }
 
@@ -88,8 +89,8 @@ public class DummyHttpClient extends HttpClient<String> {
     }
 
     @Override
-    protected HttpResponse makeHttpRequest(String entity, long startTime) {
-        return new HttpResponse(startTime);
+    protected HttpResponse makeHttpRequest(String entity, ScenarioContext context) {
+        return new HttpResponse(0, 0);
     }
 
     @Override

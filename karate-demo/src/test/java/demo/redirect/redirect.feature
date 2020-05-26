@@ -1,3 +1,4 @@
+@mock-servlet-todo
 Feature: disable redirects in order to assert against the location header
 
 Background:
@@ -48,5 +49,3 @@ Scenario: post redirects can be disabled
     When method get
     Then status 200
     And match response == { foo: ['bar'] }
-
-

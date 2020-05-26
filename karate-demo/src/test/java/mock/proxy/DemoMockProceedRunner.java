@@ -2,10 +2,10 @@ package mock.proxy;
 
 import com.intuit.karate.FileUtils;
 import com.intuit.karate.Match;
-import com.intuit.karate.cucumber.CucumberRunner;
-import com.intuit.karate.cucumber.KarateStats;
+import com.intuit.karate.Runner;
+import com.intuit.karate.Results;
 import com.intuit.karate.netty.FeatureServer;
-import cucumber.api.CucumberOptions;
+import com.intuit.karate.KarateOptions;
 import demo.TestBase;
 import java.io.File;
 import java.util.Map;
@@ -18,7 +18,7 @@ import org.junit.Test;
  *
  * @author pthomas3
  */
-@CucumberOptions(tags = "~@ignore", features = {
+@KarateOptions(tags = "~@ignore", features = {
     "classpath:demo/cats", 
     "classpath:demo/greeting"})
 public class DemoMockProceedRunner {
@@ -28,7 +28,7 @@ public class DemoMockProceedRunner {
     @BeforeClass
     public static void beforeClass() throws Exception {
         int port = TestBase.startServer();
-        Map map = Match.init().def("demoServerPort", port).allAsMap();
+        Map map = new Match().def("demoServerPort", port).allAsMap();
         File file = FileUtils.getFileRelativeTo(DemoMockProceedRunner.class, "demo-mock-proceed.feature");
         server = FeatureServer.start(file, 0, false, map);
     }
@@ -36,18 +36,18 @@ public class DemoMockProceedRunner {
     @AfterClass
     public static void afterClass() {
         server.stop();
-        TestBase.afterClass();
     }     
 
     @Test
     public void testParallel() {
         int port = server.getPort();
         System.setProperty("karate.env", "mock");
-        System.setProperty("demo.server.port", port + "");        
+        System.setProperty("demo.server.port", port + "");
+        System.setProperty("demo.server.https", "false");        
         String karateOutputPath = "target/mock-proceed";
-        KarateStats stats = CucumberRunner.parallel(getClass(), 1, karateOutputPath);
+        Results results = Runner.parallel(getClass(), 1, karateOutputPath);
         // DemoMockUtils.generateReport(karateOutputPath);
-        assertTrue("there are scenario failures", stats.getFailCount() == 0);
+        assertTrue("there are scenario failures", results.getFailCount() == 0);
     }
 
 }

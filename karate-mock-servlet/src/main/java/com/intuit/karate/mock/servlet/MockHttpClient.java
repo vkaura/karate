@@ -23,8 +23,9 @@
  */
 package com.intuit.karate.mock.servlet;
 
+import com.intuit.karate.Config;
 import com.intuit.karate.FileUtils;
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.core.ScenarioContext;
 import static com.intuit.karate.http.Cookie.DOMAIN;
 import static com.intuit.karate.http.Cookie.MAX_AGE;
 import static com.intuit.karate.http.Cookie.PATH;
@@ -32,8 +33,6 @@ import static com.intuit.karate.http.Cookie.SECURE;
 import static com.intuit.karate.http.Cookie.VERSION;
 import com.intuit.karate.http.HttpBody;
 import com.intuit.karate.http.HttpClient;
-import com.intuit.karate.http.HttpConfig;
-import com.intuit.karate.http.HttpRequest;
 import com.intuit.karate.http.HttpRequestBuilder;
 import com.intuit.karate.http.HttpResponse;
 import com.intuit.karate.http.HttpUtils;
@@ -80,7 +79,7 @@ public abstract class MockHttpClient extends HttpClient<HttpBody> {
      * the 'configure userDefined' keyword
      */
     @Override
-    public void configure(HttpConfig config, ScriptContext context) {
+    public void configure(Config config, ScenarioContext context) {
 
     }
 
@@ -163,7 +162,7 @@ public abstract class MockHttpClient extends HttpClient<HttpBody> {
     }
 
     @Override
-    protected HttpResponse makeHttpRequest(HttpBody entity, long startTime) {
+    protected HttpResponse makeHttpRequest(HttpBody entity, ScenarioContext context) {
         logger.info("making mock http client request: {} - {}", request.getMethod(), getRequestUri());
         MockHttpServletRequest req = requestBuilder.buildRequest(getServletContext());
         byte[] bytes;
@@ -188,15 +187,20 @@ public abstract class MockHttpClient extends HttpClient<HttpBody> {
         }
         MockHttpServletResponse res = new MockHttpServletResponse();
         logRequest(req, bytes);
+        long startTime = System.currentTimeMillis();
         try {
             getServlet(request).service(req, res);
         } catch (Exception e) {
+            String message = e.getMessage();
+            if (message == null && e.getCause() != null) {
+                message = e.getCause().getMessage();
+            }
+            logger.error("mock servlet request failed: {}", message);
             throw new RuntimeException(e);
         }
-        long responseTime = getResponseTime(startTime);
+        HttpResponse response = new HttpResponse(startTime, System.currentTimeMillis());
         bytes = res.getContentAsByteArray();
         logResponse(res, bytes);
-        HttpResponse response = new HttpResponse(responseTime);
         response.setUri(getRequestUri());
         response.setBody(bytes);
         response.setStatus(res.getStatus());

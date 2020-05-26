@@ -1,4 +1,5 @@
 Feature: dynamic params using scenario-outline, examples and json
+    see also the file demo/outline/examples.feature
 
 Background:
     * url demoBaseUrl
@@ -76,7 +77,7 @@ Scenario: using a data-driven called feature instead of a scenario outline
     | 'bar'  |           |        |     5 | ['country', 'active']        |
     | 'baz'  | 'JP'      |        |       | ['active', 'limit']          |
     |        | 'US'      |        |     3 | ['name', 'active']           |
-    |        |           | false  |       | ['name', 'country', 'limit'] |
+    |        |           | true   |       | ['name', 'country', 'limit'] |
     
     # the assertions in the called feature use some js for the sake of demo
     # but the next scenario below is far simpler and does not use js at all
@@ -84,7 +85,7 @@ Scenario: using a data-driven called feature instead of a scenario outline
 
 Scenario: using the set keyword to build json and nulls are skipped by default
     this is possibly the simplest form of all the above, avoiding any javascript
-    but still needing a 'call' to a second feature file
+    but does require however - a 'call' to a second feature file
 
     # table would have been sufficient below, but here we demo how 'set' is simply a 'transpose' of table
     * set data

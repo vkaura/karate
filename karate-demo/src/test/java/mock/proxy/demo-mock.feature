@@ -1,7 +1,8 @@
 Feature: stateful mock server
 
 Background:
-* def nextId = call read('increment.js')
+* def curId = 0
+* def nextId = function(){ return ~~curId++ }
 * def cats = {}
 
 Scenario: pathMatches('/greeting') && paramValue('name') != null
@@ -19,18 +20,24 @@ Scenario: pathMatches('/cats') && methodIs('post') && typeContains('xml')
         | path | value        |
         | id   | id           |
         | name | cat.cat.name |
-    * eval cats[id + ''] = catJson
+    * cats[id + ''] = catJson
     * def response = cat
 
 Scenario: pathMatches('/cats') && methodIs('post')
     * def cat = request
     * def id = nextId()
     * set cat.id = id
-    * eval cats[id + ''] = cat
+    * cats[id + ''] = cat
     * def response = cat
 
 Scenario: pathMatches('/cats')
     * def response = $cats.*
+
+Scenario: pathMatches('/cats/{id}') && methodIs('put')
+    * def cat = request
+    * def id = pathParams.id
+    * cats[id + ''] = cat
+    * def response = cat
 
 Scenario: pathMatches('/cats/{id}') && acceptContains('xml')
     * def cat = cats[pathParams.id]

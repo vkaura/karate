@@ -9,6 +9,18 @@ This can be a huge time-saver as you don't have to spend time waiting for your a
 
 So yes, you can test HTTP web-services with the same ease that you expect from traditional unit-tests. Especially for micro-services - when you combine this approach with Karate's data-driven and data-matching capabilities, you can lean towards having more integration tests without losing any of the benefits of unit-tests.
 
+## Using
+### Maven
+
+```xml
+    <dependency>
+        <groupId>com.intuit.karate</groupId>
+        <artifactId>karate-mock-servlet</artifactId>
+        <version>${karate.version}</version>
+        <scope>test</scope>
+    </dependency> 
+```
+
 ## Switching the HTTP Client
 Karate actually allows you to switch the implementation of the Karate [`HttpClient`](../karate-core/src/main/java/com/intuit/karate/http/HttpClient.java) even *during* a test. For mocking a servlet container, you don't need to implement it from scratch and you just need to over-ride one or two methods of the mock-implementation that Karate provides.
 
@@ -37,6 +49,15 @@ Note that the first example above tests the whole of the [`karate-demo`](../kara
 Everything is typically tied together in [bootstrap configuration](https://github.com/intuit/karate#configuration). If you do this right, your `*.feature` files can be re-used for mock as well as *real* integration tests.
 
 Use the test configuration for this `karate-mock-servlet` project as a reference: [`karate-config.js`](src/test/java/karate-config.js)
+
+## Limitations
+Most teams would not run into these, but if you do, please [consider contributing](https://github.com/intuit/karate/projects/3#card-22529274) !
+
+* File Upload is not supported.
+* Other similar edge-cases (such as redirects) are not supported.
+
+Teams typically use the mock-servlet for simple JSON / XML request-response use cases. If you find some file-upload or negative-test scenarios failing because of the above limitations, you can choose to [`tag`](https://github.com/intuit/karate#tags) those tests to run only in your end-to-end integration test environment.
+
 
 
 

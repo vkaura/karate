@@ -24,15 +24,15 @@
 package com.intuit.karate.http.apache;
 
 import com.intuit.karate.FileUtils;
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.core.ScenarioContext;
+import com.intuit.karate.http.HttpLogModifier;
+import com.intuit.karate.http.HttpRequest;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpException;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpResponseInterceptor;
 import org.apache.http.protocol.HttpContext;
-import org.slf4j.Logger;
 
 /**
  *
@@ -40,27 +40,36 @@ import org.slf4j.Logger;
  */
 public class ResponseLoggingInterceptor implements HttpResponseInterceptor {
 
-    private final ScriptContext context;
-    private final AtomicInteger counter;
+    private final ScenarioContext context;
+    private final HttpLogModifier logModifier;
+    private final RequestLoggingInterceptor requestInterceptor;
 
-    public ResponseLoggingInterceptor(AtomicInteger counter, ScriptContext context) {
-        this.counter = counter;
+    public ResponseLoggingInterceptor(RequestLoggingInterceptor requestInterceptor, ScenarioContext context) {
+        this.requestInterceptor = requestInterceptor;
         this.context = context;
-    }    
+        logModifier = context.getConfig().getLogModifier();
+    }
 
     @Override
     public void process(HttpResponse response, HttpContext httpContext) throws HttpException, IOException {
-        if (!context.logger.isDebugEnabled()) {
-            return;
-        }        
-        int id = counter.get();
+        HttpRequest actual = context.getPrevRequest();
+        actual.stopTimer();
+        int id = requestInterceptor.getCounter().get();
         StringBuilder sb = new StringBuilder();
-        sb.append('\n').append(id).append(" < ").append(response.getStatusLine().getStatusCode()).append('\n');
-        LoggingUtils.logHeaders(sb, id, '<', response);
+        sb.append("response time in milliseconds: ").append(actual.getResponseTimeFormatted()).append('\n');
+        sb.append(id).append(" < ").append(response.getStatusLine().getStatusCode()).append('\n');
+        HttpLogModifier responseModifier = logModifier == null ? null : logModifier.enableForUri(actual.getUri()) ? logModifier : null;
+        LoggingUtils.logHeaders(responseModifier, sb, id, '<', response);
         HttpEntity entity = response.getEntity();
         if (LoggingUtils.isPrintable(entity)) {
             LoggingEntityWrapper wrapper = new LoggingEntityWrapper(entity);
             String buffer = FileUtils.toString(wrapper.getContent());
+            if (context.getConfig().isLogPrettyResponse()) {
+                buffer = FileUtils.toPrettyString(buffer);
+            }
+            if (responseModifier != null) {
+                buffer = responseModifier.response(actual.getUri(), buffer);
+            }
             sb.append(buffer).append('\n');
             response.setEntity(wrapper);
         }

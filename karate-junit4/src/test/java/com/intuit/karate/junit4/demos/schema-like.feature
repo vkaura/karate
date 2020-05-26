@@ -63,46 +63,87 @@ Then match response ==
 # should be null or an array of strings
 * match foo == '##[] #string'
 
+# each item of the array should match regex (with backslash involved)
+* match foo == '#[] #regex \\w+'
+
 # contains
-* def foo = [{ a: 1, b: 'x' }, { a: 2, b: 'y' }]
+* def actual = [{ a: 1, b: 'x' }, { a: 2, b: 'y' }]
 
-* def exact = { a: '#number', b: '#string' }
-* def partial = { a: '#number' }
-* def nope = { c: '#boolean' }
+* def schema = { a: '#number', b: '#string' }
+* def partSchema = { a: '#number' }
+* def badSchema = { c: '#boolean' }
+* def mixSchema = { a: '#number', c: '#boolean' }
 
-* def reversed = [{ a: 2, b: 'y' }, { b: 'x', a: 1 }]
+* def shuffled = [{ a: 2, b: 'y' }, { b: 'x', a: 1 }]
 * def first = { a: 1, b: 'x' }
-* def others = [{ a: 3, b: 'u' }, { a: 4, b: 'v' }]
+* def part = { a: 1 }
+* def mix = { b: 'y', c: true }
+* def other = [{ a: 3, b: 'u' }, { a: 4, b: 'v' }]
+* def some = [{ a: 1, b: 'x' }, { a: 5, b: 'w' }]
 
-* match foo[0] == exact
-* match foo[0] == '#(exact)'
+* match actual[0] == schema
+* match actual[0] == '#(schema)'
 
-* match foo[0] contains partial
-* match foo[0] == '#(^partial)'
+* match actual[0] contains partSchema
+* match actual[0] == '#(^partSchema)'
 
-* match foo[0] !contains nope
-* match foo[0] == '#(!^nope)'
+* match actual[0] contains any mixSchema
+* match actual[0] == '#(^*mixSchema)'
 
-* match each foo == exact
-* match foo == '#[] exact'
+* match actual[0] !contains badSchema
+* match actual[0] == '#(!^badSchema)'
 
-* match each foo contains partial
-* match foo == '#[] ^partial'
+* match each actual == schema
+* match actual == '#[] schema'
 
-* match each foo !contains nope
-* match foo == '#[] !^nope'
+* match each actual contains partSchema
+* match actual == '#[] ^partSchema'
 
-* match foo contains only reversed
-* match foo == '#(^^reversed)'
+* match each actual contains any mixSchema
+* match actual == '#[] ^*mixSchema'
 
-* match foo contains first
-* match foo == '#(^first)'
+* match each actual !contains badSchema
+* match actual == '#[] !^badSchema'
 
-* match foo !contains others
-* match foo == '#(!^others)'
+* match actual contains only shuffled
+* match actual == '#(^^shuffled)'
 
-* assert foo.length == 2
-* match foo == '#[2]'
+* match actual contains first
+* match actual == '#(^first)'
+
+* match actual contains any some
+* match actual == '#(^*some)'
+
+* match actual !contains other
+* match actual == '#(!^other)'
+
+# no in-line equivalent !
+* match actual contains '#(^part)'
+
+# no in-line equivalent !
+* match actual contains '#(^*mix)'
+
+* assert actual.length == 2
+* match actual == '#[2]'
+
+Scenario: complex nested arrays
+* def json =
+"""
+{
+  "foo": {
+    "bars": [
+      { "barOne": "dc", "barTwos": [] },
+      { "barOne": "dc", "barTwos": [{ title: 'blah' }] },
+      { "barOne": "dc", "barTwos": [{ title: 'blah' }], barThrees: [] },
+      { "barOne": "dc", "barTwos": [{ title: 'blah' }], barThrees: [{ num: 1 }] }
+    ]
+  }
+}
+"""
+* def barTwo = { title: '#string' }
+* def barThree = { num: '#number' }
+* def bar = { barOne: '#string', barTwos: '#[] barTwo', barThrees: '##[] barThree' }
+* match json.foo.bars == '#[] bar'
 
 Scenario: re-usable json chunks as nodes, but optional
 * def dogSchema = { id: '#string', color: '#string' }
@@ -121,3 +162,12 @@ Scenario: pretty print json
 Scenario: more pretty print
 * def myJson = { foo: 'bar', baz: [1, 2, 3]}
 * print 'pretty print:\n' + karate.pretty(myJson)
+
+Scenario: various ways of checking that a string ends with a number
+* def foo = 'hello1'
+* match foo == '#regex hello[0-9]+'
+* match foo == '#regex .+[0-9]+'
+* match foo contains 'hello'
+* assert foo.startsWith('hello')
+* def isHello = function(s){ return s.startsWith('hello') && karate.match(s, '#regex .+[0-9]+').pass }
+* match foo == '#? isHello(_)'

@@ -25,16 +25,16 @@ Background:
 function(){
   var info = karate.info; 
   karate.log('after', info.scenarioType + ':', info.scenarioName);
-  karate.call('after.feature', { caller: info.featureFileName });
+  karate.call('after-scenario.feature', { caller: info.featureFileName });
 }
 """
 
 # for an explanation of 'karate.info' above: https://github.com/intuit/karate#the-karate-object
 # note that 'karate.info' will not work within features invoked using the 'call' or 'callonce' keywords
+# one limitation of afterScenario and afterFeature is that any feature steps involved will NOT appear
+# in the JSON report output and HTML reports
 
-# IMPORTANT: 'afterFeature' works only with the Karate "runners" (JUnit, TestNG, CucumberRunner.parallel)
-# which simply means that Cucumber IDE "right-click-and-run" will not work
-* configure afterFeature = function(){ karate.log('end feature') }
+* configure afterFeature = function(){ karate.call('after-feature.feature'); }
 
 Scenario: first
     * print foo
@@ -51,5 +51,6 @@ Scenario Outline:
     | foo + 2 |
 
 Scenario: 'after' hooks do not apply to called features
-    # 'afterScenario' and 'afterFeature' are NOT supported in 'called' features
+    # 'afterScenario' and 'afterFeature' only work in the "top-level" feature
+    #  and are NOT supported in 'called' features
     * def result = call read('called.feature')

@@ -1,12 +1,11 @@
-function() {   
+function fn() {   
   var env = karate.env; // get system property 'karate.env'
   if (!env) {
     env = 'dev';
   }
   var config = {
     env: env,
-    testConfig: 'bar',
-    wiremockPort: karate.properties['wiremock.port']
+    testConfig: 'bar'
   }
   if (env == 'dev') {
     // customize
@@ -14,6 +13,11 @@ function() {
   } else if (env == 'e2e') {
     // customize
   }
-  config.myObject = karate.read('classpath:test.json');
+  config.myObject = read('classpath:test.json');
+  config.myFunction = read('classpath:test.js');
+  config.myUtils = karate.call('classpath:utils.feature');
+  var port = karate.properties['karate.server.port'];
+  port = port || '8080';
+  config.mockServerUrl = 'http://localhost:' + port + '/v1/';
   return config;
 }

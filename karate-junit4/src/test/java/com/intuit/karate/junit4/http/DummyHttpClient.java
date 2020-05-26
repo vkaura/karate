@@ -23,10 +23,10 @@
  */
 package com.intuit.karate.junit4.http;
 
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.core.ScenarioContext;
 import com.intuit.karate.http.Cookie;
 import com.intuit.karate.http.HttpClient;
-import com.intuit.karate.http.HttpConfig;
+import com.intuit.karate.Config;
 import com.intuit.karate.http.HttpResponse;
 import com.intuit.karate.http.MultiPartItem;
 import com.intuit.karate.http.MultiValuedMap;
@@ -47,7 +47,7 @@ public class DummyHttpClient extends HttpClient<String> {
     private Map<String, Object> userDefined;
 
     @Override
-    public void configure(HttpConfig config, ScriptContext context) {
+    public void configure(Config config, ScenarioContext context) {
         userDefined = config.getUserDefined();
     }
 
@@ -97,8 +97,8 @@ public class DummyHttpClient extends HttpClient<String> {
     }
 
     @Override
-    protected HttpResponse makeHttpRequest(String entity, long startTime) {
-        HttpResponse response = new HttpResponse(startTime);
+    protected HttpResponse makeHttpRequest(String entity, ScenarioContext context) {
+        HttpResponse response = new HttpResponse(0, 0);
         response.setStatus(200);
         String message = "hello " + userDefined.get("name");
         response.setBody(message.getBytes());

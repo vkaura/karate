@@ -24,7 +24,8 @@
 package com.intuit.karate.http.apache;
 
 import com.intuit.karate.FileUtils;
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.core.ScenarioContext;
+import com.intuit.karate.http.HttpLogModifier;
 import com.intuit.karate.http.HttpRequest;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,13 +41,18 @@ import org.apache.http.protocol.HttpContext;
  */
 public class RequestLoggingInterceptor implements HttpRequestInterceptor {
 
-    private final ScriptContext context;
-    private final AtomicInteger counter;
-    
-    public RequestLoggingInterceptor(AtomicInteger counter, ScriptContext context) {
+    private final ScenarioContext context;
+    private final HttpLogModifier logModifier;
+    private final AtomicInteger counter = new AtomicInteger();    
+
+    public RequestLoggingInterceptor(ScenarioContext context) {
         this.context = context;
-        this.counter = counter;
-    }      
+        logModifier = context.getConfig().getLogModifier();
+    }
+
+    public AtomicInteger getCounter() {
+        return counter;
+    }
 
     @Override
     public void process(org.apache.http.HttpRequest request, HttpContext httpContext) throws HttpException, IOException {
@@ -54,28 +60,32 @@ public class RequestLoggingInterceptor implements HttpRequestInterceptor {
         int id = counter.incrementAndGet();
         String uri = (String) httpContext.getAttribute(ApacheHttpClient.URI_CONTEXT_KEY);
         String method = request.getRequestLine().getMethod();
-        actual.setUri(uri);        
-        actual.setMethod(method);
+        actual.setUri(uri);
+        actual.setMethod(method);        
         StringBuilder sb = new StringBuilder();
-        sb.append('\n').append(id).append(" > ").append(method).append(' ').append(uri).append('\n');
-        LoggingUtils.logHeaders(sb, id, '>', request, actual);
+        sb.append("request:\n").append(id).append(" > ").append(method).append(' ').append(uri).append('\n');
+        HttpLogModifier requestModifier = logModifier == null ? null : logModifier.enableForUri(uri) ? logModifier : null;
+        LoggingUtils.logHeaders(requestModifier, sb, id, '>', request, actual);
         if (request instanceof HttpEntityEnclosingRequest) {
             HttpEntityEnclosingRequest entityRequest = (HttpEntityEnclosingRequest) request;
             HttpEntity entity = entityRequest.getEntity();
             if (LoggingUtils.isPrintable(entity)) {
                 LoggingEntityWrapper wrapper = new LoggingEntityWrapper(entity); // todo optimize, preserve if stream
-                if (context.logger.isDebugEnabled()) {
-                    String buffer = FileUtils.toString(wrapper.getContent());
-                    sb.append(buffer).append('\n');
+                String buffer = FileUtils.toString(wrapper.getContent());
+                if (context.getConfig().isLogPrettyRequest()) {
+                    buffer = FileUtils.toPrettyString(buffer);
                 }
+                if (requestModifier != null) {
+                    buffer = requestModifier.request(uri, buffer);
+                }
+                sb.append(buffer).append('\n');
                 actual.setBody(wrapper.getBytes());
                 entityRequest.setEntity(wrapper);
             }
         }
         context.setPrevRequest(actual);
-        if (context.logger.isDebugEnabled()) {
-            context.logger.debug(sb.toString());
-        }
+        context.logger.debug(sb.toString());
+        actual.startTimer();
     }
 
 }

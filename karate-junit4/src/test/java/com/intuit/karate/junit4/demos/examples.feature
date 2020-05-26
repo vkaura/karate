@@ -16,6 +16,7 @@ Given def cat =
 Then match cat.kittens[*].id == [23, 42]
 Then match cat.kittens[*].id contains 23
 Then match cat.kittens[*].id contains [42, 23]
+Then match cat..name == ['Billie', 'Bob', 'Wild']
 Then match each cat.kittens contains { id: '#number' }
 Then match each cat.kittens == { id: '#notnull', name: '#regex [A-Z][a-z]+' }
 
@@ -32,6 +33,10 @@ Then match each cat.kittens contains { id: '#? isLessThanFifty(_)' }
 # using the karate object if the expression is dynamic
 * def temp =  karate.jsonPath(cat, "$.kittens[?(@.name=='" + bob.name + "')]")
 * match temp[0] == bob
+
+# getting the first element of the array returned by a json-path expression in one step
+* def temp =  karate.jsonPath(cat, "$.kittens[?(@.name=='" + bob.name + "')]")[0]
+* match temp == bob
 
 Given def foo = 42
 And def bar = { hello: 'world' }
@@ -133,7 +138,7 @@ Then match session == <session><locale>en</locale><sessionUser><user><name>john<
 * match response == expected
 
 * def temp = 'before'
-* eval if (zone == 'zone1') karate.set('temp', 'after')
+* if (zone == 'zone1') karate.set('temp', 'after')
 * match temp == 'after'
 
 * eval
@@ -147,6 +152,16 @@ for (var n in nums) {
 karate.set('temp', squares);
 """
 * match temp == [0, 1, 4, 9, 16]
+
+* def json = { a: 1 }
+* def key = 'b'
+# use dynamic path expressions to mutate json
+* json[key] = 2
+* match json == { a: 1, b: 2 }
+* karate.remove('json', '$.' + key)
+* match json == { a: 1 }
+* karate.set('json', '$.c[]', { d: 'e' })
+* match json == { a: 1, c: [{ d: 'e' }] }
 
 # #null and #notpresent
 * def foo = { }
@@ -166,3 +181,29 @@ karate.set('temp', squares);
 * match foo == { a: '##notnull' }
 * match foo == { a: '#present' }
 * match foo == { a: '#ignore' }
+
+# json-path filter
+* def expected = [{ entityId: 'foo'}, { entityId: 'bar'}]
+
+* def temp = $expected[?(@.entityId=='foo')]
+* match temp == [{ entityId: 'foo'}]
+
+* def entityId = 'foo'
+* def temp = karate.jsonPath(expected, "$[?(@.entityId=='foo')]")
+* match temp == [{ entityId: 'foo'}]
+
+# using java for a case-insensitive string comparison
+* def equalsIgnoreCase = function(a, b){ return a.equalsIgnoreCase(b) }
+* assert equalsIgnoreCase('hello', 'HELLO')
+* def foo = { message: 'HELLO' }
+* match foo == { message: '#? equalsIgnoreCase(_, "hello")' }
+
+# csv conversion
+* text foo =
+    """
+    name,type
+    Billie,LOL
+    Bob,Wild
+    """
+* csv bar = foo
+* match bar == [{ name: 'Billie', type: 'LOL' }, { name: 'Bob', type: 'Wild' }]

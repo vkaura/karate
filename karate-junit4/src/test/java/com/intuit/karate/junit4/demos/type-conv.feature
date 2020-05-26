@@ -11,7 +11,17 @@ Scenario: multi-line text
       }
     }
     """
-    * match query == read('query.txt')
+    * match query == read('query.txt').replaceAll("\r", "")
+
+Scenario: multi-line text with the starting line indented
+    * text query =
+    """
+      {
+abcd
+efgh   
+      }
+    """
+    * match query == read('query2.txt').replaceAll("\r", "")
 
 Scenario Outline: multi-line text in a scenario outline
     * text query =
@@ -23,7 +33,7 @@ Scenario Outline: multi-line text in a scenario outline
       }
     }
     """
-    * match query == read('query.txt')
+    * match query == read('query.txt').replaceAll("\r", "")
 
     Examples:
     | name           |
@@ -32,8 +42,10 @@ Scenario Outline: multi-line text in a scenario outline
 Scenario: multi-line string expression
     # this is normally never required since you can use replace
     * def name = 'Luke Skywalker'
-    * string query = '{\n  hero(name: "' + name + '") {\n    height\n    mass\n  }\n}'
-    * match query == read('query.txt')
+    * string expectedOnUnix = '{\n  hero(name: "' + name + '") {\n    height\n    mass\n  }\n}'
+    * string expectedOnWindows = '{\r\n  hero(name: "' + name + '") {\r\n    height\r\n    mass\r\n  }\r\n}'
+    * def actual = read('query.txt')
+    * assert actual === expectedOnUnix || actual === expectedOnWindows
 
 Scenario: string to json
     # this would be of type string (not JSON)
@@ -116,6 +128,10 @@ Scenario: json to java map - useful in some situations
     * def map = karate.toBean(response, 'java.util.LinkedHashMap')
     * def first = map.keySet().iterator().next()
     * match first == 'key1'
+    # short cut for the above
+    * def map = karate.toMap(response)
+    * def first = map.keySet().iterator().next()
+    * match first == 'key1'
 
 Scenario: java pojo to json
     * def className = 'com.intuit.karate.junit4.demos.SimplePojo'
@@ -181,3 +197,11 @@ Scenario: js and numbers - float vs int
     # but you can easily coerce to an integer if needed
     * string json = { bar: '#(~~(1 * foo))' }
     * match json == '{"bar":10}'
+
+Scenario: large numbers in json - use java BigDecimal
+   * def big = 123123123123
+   * string json = { num: '#(big)' }
+   * match json == '{"num":1.23123123123E11}'
+   * def big = new java.math.BigDecimal(123123123123)
+   * string json = { num: '#(big)' }
+   * match json == '{"num":123123123123}'

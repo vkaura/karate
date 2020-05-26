@@ -23,7 +23,8 @@
  */
 package com.intuit.karate.http;
 
-import com.intuit.karate.ScriptContext;
+import com.intuit.karate.Config;
+import com.intuit.karate.core.ScenarioContext;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,13 +40,13 @@ public class CustomDummyHttpClient extends DummyHttpClient {
     private Map<String, Object> userDefined;
     
     @Override
-    public void configure(HttpConfig config, ScriptContext context) {
+    public void configure(Config config, ScenarioContext context) {
         userDefined = config.getUserDefined();
     }        
 
     @Override
-    protected HttpResponse makeHttpRequest(String entity, long startTime) {
-        HttpResponse response = new HttpResponse(startTime);
+    protected HttpResponse makeHttpRequest(String entity, ScenarioContext context) {
+        HttpResponse response = new HttpResponse(0, 0);
         String message = "hello " + userDefined.get("name");
         response.setBody(message.getBytes());
         return response;

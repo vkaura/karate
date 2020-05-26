@@ -23,9 +23,9 @@
  */
 package demo;
 
-import com.intuit.karate.cucumber.CucumberRunner;
-import com.intuit.karate.cucumber.KarateStats;
-import cucumber.api.CucumberOptions;
+import com.intuit.karate.Runner;
+import com.intuit.karate.Results;
+import com.intuit.karate.KarateOptions;
 import java.io.File;
 import org.apache.commons.io.FileUtils;
 import static org.junit.Assert.assertTrue;
@@ -35,7 +35,7 @@ import org.junit.Test;
  *
  * @author pthomas3
  */
-@CucumberOptions(tags = {"~@ignore"})
+@KarateOptions(tags = {"~@ignore", "~@mock-servlet-todo"})
 public class MockSpringMvcServletTest {
     
     @Test
@@ -43,13 +43,10 @@ public class MockSpringMvcServletTest {
         File srcDir = new File("../karate-demo/src/test/java");
         File destDir = new File("target/test-classes");
         FileUtils.copyDirectory(srcDir, destDir, 
-                f -> !f.getName().equals("karate-config.js") // don't over-write karate-config.js
-                        && !f.getName().equals("redirect.feature") // too much work to support redirects in mock servlet
-                        && !f.getName().equals("request.feature") // TODO support (karate.request) in mock servlet
-                        && !f.getName().equals("sign-in.feature"), false); // TODO support servlet filters
+                f -> !f.getName().equals("karate-config.js"), false); // don't over-write karate-config.js
         System.setProperty("karate.env", "dev-mock-springmvc");
-        KarateStats stats = CucumberRunner.parallel(getClass(), 5);
-        assertTrue("there are scenario failures", stats.getFailCount() == 0);
+        Results results = Runner.parallel(getClass(), 5);
+        assertTrue("there are scenario failures", results.getFailCount() == 0);
     }
     
 }
